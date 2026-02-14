@@ -41,7 +41,15 @@ To run on a physical device, install [Expo Go](https://expo.dev/go) and scan the
 
 ### Voice Recognition
 
-The voice input feature uses the Web Speech API and works in browsers that support it (Chrome, Edge). On mobile, voice recognition requires native speech modules — the button will appear but may not function on all devices without additional native configuration.
+Voice input uses [expo-speech-recognition](https://github.com/jamsch/expo-speech-recognition) and works on iOS, Android, and Web.
+
+| Environment | Voice works? | How to run |
+|---|---|---|
+| Web (Chrome/Edge) | Yes | `npx expo start --web` |
+| Dev build (iOS/Android) | Yes | `npx expo run:ios` / `npx expo run:android` |
+| Expo Go | No (button hidden) | `npx expo start` |
+
+Expo Go doesn't support custom native modules, so the voice button is automatically hidden there. To test voice on a phone or simulator, create a [dev build](https://docs.expo.dev/develop/development-builds/introduction/) with `npx expo run:ios` or `npx expo run:android`.
 
 ## Project Structure
 
@@ -60,7 +68,8 @@ The voice input feature uses the Web Speech API and works in browsers that suppo
 │   │   └── GrandStaffGameScreen.tsx  # Grand staff gameplay
 │   └── utils/
 │       ├── theme.ts                  # Colors, spacing, typography constants
-│       └── sound.ts                  # Programmatically generated sound effects
+│       ├── sound.ts                  # Programmatically generated sound effects
+│       └── useVoiceRecognition.ts    # Cross-platform voice input hook
 ├── app.json                          # Expo configuration
 └── tsconfig.json                     # TypeScript configuration
 ```
