@@ -47,7 +47,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HALF_SPACE = 12; // pixels per staff position
 const STAFF_CONTAINER_H = HALF_SPACE * 20; // generous room for ledger lines
 const NOTE_BUTTONS: NoteName[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-const SPAWN_INTERVAL_MS = 2800; // new note every N ms
 const NOTES_PER_ROUND = 20;
 
 // ---------------------------------------------------------------------------
@@ -69,7 +68,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
   const noteKeyRef = useRef(0);
   const activeNotesRef = useRef<ActiveNote[]>([]);
   const availableNotes = useRef(getNotesForLevel(clef, level)).current;
-  const spawnTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const spawnedRef = useRef(0);
+  const spawnNextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep ref in sync
   activeNotesRef.current = activeNotes;
@@ -151,13 +151,11 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
   }, [stopVoiceRecognition]);
 
   // ------------------------------------------------------------------
-  // Spawn notes
+  // Spawn one note at a time
   // ------------------------------------------------------------------
   const spawnNote = useCallback(() => {
-    if (spawned >= NOTES_PER_ROUND) {
-      if (spawnTimer.current) clearInterval(spawnTimer.current);
-      return;
-    }
+    if (spawnedRef.current >= NOTES_PER_ROUND) return;
+    spawnedRef.current += 1;
 
     const note = availableNotes[Math.floor(Math.random() * availableNotes.length)];
     const key = noteKeyRef.current++;
@@ -180,41 +178,27 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
         playMissed();
         setTotal((t) => t + 1);
         setStreak(0);
-        // Gently fade it out instead of explosion
         setActiveNotes((prev) => prev.filter((n) => n.key !== key));
-        checkFinished();
+        // Spawn next note after a short pause
+        spawnNextTimerRef.current = setTimeout(spawnNote, 400);
       }
     });
-  }, [availableNotes, level.scrollDurationMs, spawned]);
+  }, [availableNotes, level.scrollDurationMs]);
 
-  // Start spawning
+  // Spawn the very first note
   useEffect(() => {
     if (finished) return;
-
-    // Spawn first note immediately
-    const timeout = setTimeout(() => {
-      spawnNote();
-      spawnTimer.current = setInterval(spawnNote, SPAWN_INTERVAL_MS);
-    }, 500);
-
+    const timeout = setTimeout(spawnNote, 500);
     return () => {
       clearTimeout(timeout);
-      if (spawnTimer.current) clearInterval(spawnTimer.current);
+      if (spawnNextTimerRef.current) clearTimeout(spawnNextTimerRef.current);
     };
   }, [finished, spawnNote]);
-
-  // ------------------------------------------------------------------
-  // Check if round is complete
-  // ------------------------------------------------------------------
-  const checkFinished = useCallback(() => {
-    // We'll set finished once total answered + missed == NOTES_PER_ROUND
-    // This is checked after every answer/miss
-  }, []);
 
   useEffect(() => {
     if (total >= NOTES_PER_ROUND && !finished) {
       setFinished(true);
-      if (spawnTimer.current) clearInterval(spawnTimer.current);
+      if (spawnNextTimerRef.current) clearTimeout(spawnNextTimerRef.current);
       stopVoiceRecognition();
     }
   }, [total, finished, stopVoiceRecognition]);
@@ -266,11 +250,16 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
       ),
     );
 
-    // Remove after animation plays
+    // Stop the scroll animation so the note doesn't also trigger the "missed" handler
+    target.animX.stopAnimation();
+
+    // Remove after feedback animation plays, then spawn next
+    const delay = isCorrect ? 600 : 500;
     setTimeout(() => {
       setActiveNotes((prev) => prev.filter((n) => n.key !== target.key));
-    }, isCorrect ? 600 : 500);
-  }, []);
+      spawnNextTimerRef.current = setTimeout(spawnNote, 300);
+    }, delay);
+  }, [spawnNote]);
 
   // ------------------------------------------------------------------
   // Render

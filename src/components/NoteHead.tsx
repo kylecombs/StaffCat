@@ -15,8 +15,7 @@ interface NoteHeadProps {
   feedback: 'none' | 'correct' | 'incorrect';
 }
 
-const NOTE_W = 18;
-const NOTE_H = 14;
+const NOTE_SIZE = 16;
 
 const NoteHead: React.FC<NoteHeadProps> = ({
   staffPosition,
@@ -97,13 +96,13 @@ const NoteHead: React.FC<NoteHeadProps> = ({
         );
       })}
 
-      {/* Note head (ellipse) */}
+      {/* Note head */}
       <Animated.View
         style={[
           styles.noteHead,
           {
             backgroundColor: bgColor,
-            top: noteY - NOTE_H / 2,
+            top: noteY - NOTE_SIZE / 2,
             transform: [{ translateX: animX }, { scale }],
             opacity: fadeOpacity,
           },
@@ -116,10 +115,10 @@ const NoteHead: React.FC<NoteHeadProps> = ({
 const styles = StyleSheet.create({
   noteHead: {
     position: 'absolute',
-    width: NOTE_W,
-    height: NOTE_H,
-    borderRadius: NOTE_W / 2,
-    left: -NOTE_W / 2,
+    width: NOTE_SIZE,
+    height: NOTE_SIZE,
+    borderRadius: NOTE_SIZE / 2,
+    left: -NOTE_SIZE / 2,
   },
   ledgerLine: {
     position: 'absolute',

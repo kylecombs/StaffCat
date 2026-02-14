@@ -39,7 +39,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HALF_SPACE = 10;
 const STAFF_CONTAINER_H = HALF_SPACE * 18;
 const NOTE_BUTTONS: NoteName[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-const SPAWN_INTERVAL_MS = 2800;
 const NOTES_PER_ROUND = 20;
 
 const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBack }) => {
@@ -58,7 +57,8 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
   const activeNotesRef = useRef<ActiveNote[]>([]);
   const trebleNotes = useRef(getNotesForLevel('treble', level)).current;
   const bassNotes = useRef(getNotesForLevel('bass', level)).current;
-  const spawnTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const spawnedRef = useRef(0);
+  const spawnNextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   activeNotesRef.current = activeNotes;
 
@@ -107,12 +107,11 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
 
   useEffect(() => () => { stopVoiceRecognition(); }, [stopVoiceRecognition]);
 
-  // Spawn
+  // Spawn one note at a time
   const spawnNote = useCallback(() => {
-    if (spawned >= NOTES_PER_ROUND) {
-      if (spawnTimer.current) clearInterval(spawnTimer.current);
-      return;
-    }
+    if (spawnedRef.current >= NOTES_PER_ROUND) return;
+    spawnedRef.current += 1;
+
     const clef: ClefType = Math.random() < 0.5 ? 'treble' : 'bass';
     const pool = clef === 'treble' ? trebleNotes : bassNotes;
     const note = pool[Math.floor(Math.random() * pool.length)];
@@ -133,26 +132,24 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
         setTotal((t) => t + 1);
         setStreak(0);
         setActiveNotes((prev) => prev.filter((n) => n.key !== key));
+        spawnNextTimerRef.current = setTimeout(spawnNote, 400);
       }
     });
-  }, [trebleNotes, bassNotes, level.scrollDurationMs, spawned]);
+  }, [trebleNotes, bassNotes, level.scrollDurationMs]);
 
   useEffect(() => {
     if (finished) return;
-    const timeout = setTimeout(() => {
-      spawnNote();
-      spawnTimer.current = setInterval(spawnNote, SPAWN_INTERVAL_MS);
-    }, 500);
+    const timeout = setTimeout(spawnNote, 500);
     return () => {
       clearTimeout(timeout);
-      if (spawnTimer.current) clearInterval(spawnTimer.current);
+      if (spawnNextTimerRef.current) clearTimeout(spawnNextTimerRef.current);
     };
   }, [finished, spawnNote]);
 
   useEffect(() => {
     if (total >= NOTES_PER_ROUND && !finished) {
       setFinished(true);
-      if (spawnTimer.current) clearInterval(spawnTimer.current);
+      if (spawnNextTimerRef.current) clearTimeout(spawnNextTimerRef.current);
       stopVoiceRecognition();
     }
   }, [total, finished, stopVoiceRecognition]);
@@ -182,10 +179,14 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
         n.key === target.key ? { ...n, feedback: isCorrect ? 'correct' : 'incorrect', answered: true } : n
       )
     );
+    target.animX.stopAnimation();
+
+    const delay = isCorrect ? 600 : 500;
     setTimeout(() => {
       setActiveNotes((prev) => prev.filter((n) => n.key !== target.key));
-    }, isCorrect ? 600 : 500);
-  }, []);
+      spawnNextTimerRef.current = setTimeout(spawnNote, 300);
+    }, delay);
+  }, [spawnNote]);
 
   if (finished) {
     const pct = total > 0 ? Math.round((score / total) * 100) : 0;
