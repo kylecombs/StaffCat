@@ -18,6 +18,53 @@ try {
   // expo-speech-recognition not available (e.g. Expo Go) — voice stays disabled
 }
 
+// ---------------------------------------------------------------------------
+// Speech engines transcribe spoken letter names as phonetic words rather than
+// single characters.  Map the common transcriptions back to note names.
+// ---------------------------------------------------------------------------
+
+const PHONETIC_TO_NOTE: Record<string, NoteName> = {
+  // A
+  AY: 'A', HEY: 'A', EH: 'A', AE: 'A', EIGHT: 'A', ACE: 'A',
+  // B
+  BE: 'B', BEE: 'B', BEA: 'B', BEE: 'B', BEAN: 'B',
+  // C
+  SEE: 'C', SEA: 'C', CEE: 'C', SI: 'C',
+  // D
+  DEE: 'D', DE: 'D', DI: 'D', THE: 'D',
+  // E
+  EE: 'E', HE: 'E', YE: 'E',
+  // F
+  EFF: 'F', EF: 'F', IF: 'F', JEFF: 'F',
+  // G
+  GEE: 'G', GE: 'G', JEE: 'G', JI: 'G', SHE: 'G', JE: 'G',
+};
+
+/** Try to extract a note name from a speech transcript. */
+function parseNoteFromTranscript(transcript: string): NoteName | null {
+  const upper = transcript.trim().toUpperCase();
+
+  // 1. Check for a standalone single letter A-G (best case)
+  const letterMatch = upper.match(/\b([A-G])\b/);
+  if (letterMatch) return letterMatch[1] as NoteName;
+
+  // 2. Split into words and check each against the phonetic map
+  const words = upper.split(/\s+/);
+  for (let i = words.length - 1; i >= 0; i--) {
+    // Strip trailing punctuation the engine may append
+    const word = words[i].replace(/[^A-Z]/g, '');
+    if (word.length === 1 && word >= 'A' && word <= 'G') return word as NoteName;
+    if (PHONETIC_TO_NOTE[word]) return PHONETIC_TO_NOTE[word];
+  }
+
+  // 3. Last resort — check if the whole transcript (stripped) is a known phonetic
+  const stripped = upper.replace(/[^A-Z]/g, '');
+  if (stripped.length === 1 && stripped >= 'A' && stripped <= 'G') return stripped as NoteName;
+  if (PHONETIC_TO_NOTE[stripped]) return PHONETIC_TO_NOTE[stripped];
+
+  return null;
+}
+
 interface UseVoiceRecognitionOptions {
   onNote: (note: NoteName) => void;
 }
@@ -36,6 +83,10 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
   const onNoteRef = useRef(onNote);
   onNoteRef.current = onNote;
 
+  // Debounce: prevent interim results from firing the same note repeatedly
+  const lastFiredRef = useRef<{ note: NoteName; time: number } | null>(null);
+  const DEBOUNCE_MS = 600;
+
   // Check availability once on mount & register event listeners
   useEffect(() => {
     if (!SpeechModule || !addSpeechListener) return;
@@ -47,7 +98,7 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
       addSpeechListener('end', () => {
         if (wantListeningRef.current) {
           try {
-            SpeechModule!.start({ lang: 'en-US', interimResults: false, continuous: true });
+            SpeechModule!.start({ lang: 'en-US', interimResults: true, continuous: true });
           } catch {
             setListening(false);
             wantListeningRef.current = false;
@@ -59,10 +110,15 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
 
       addSpeechListener('result', (event: any) => {
         const transcript: string = event.results?.[0]?.transcript ?? '';
-        const upper = transcript.trim().toUpperCase();
-        const matches = upper.match(/\b([A-G])\b/g);
-        if (matches && matches.length > 0) {
-          onNoteRef.current(matches[matches.length - 1] as NoteName);
+        const note = parseNoteFromTranscript(transcript);
+        if (note) {
+          const now = Date.now();
+          const last = lastFiredRef.current;
+          if (last && last.note === note && now - last.time < DEBOUNCE_MS) {
+            return; // skip duplicate from interim results
+          }
+          lastFiredRef.current = { note, time: now };
+          onNoteRef.current(note);
         }
       }),
 
@@ -91,7 +147,7 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
         return;
       }
       wantListeningRef.current = true;
-      SpeechModule.start({ lang: 'en-US', interimResults: false, continuous: true });
+      SpeechModule.start({ lang: 'en-US', interimResults: true, continuous: true });
     } catch (e) {
       console.warn('Could not start speech recognition:', e);
       wantListeningRef.current = false;
