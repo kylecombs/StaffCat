@@ -70,6 +70,9 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
   const availableNotes = useRef(getNotesForLevel(clef, level)).current;
   const spawnedRef = useRef(0);
   const spawnNextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Synchronous set to prevent double-spawning when stopAnimation
+  // fires the completion callback before React state updates
+  const handledKeysRef = useRef<Set<number>>(new Set());
 
   // Keep ref in sync
   activeNotesRef.current = activeNotes;
@@ -173,15 +176,13 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
       useNativeDriver: true,
     }).start(() => {
       // Note reached the clef without being answered
-      const current = activeNotesRef.current.find((n) => n.key === key);
-      if (current && !current.answered) {
-        playMissed();
-        setTotal((t) => t + 1);
-        setStreak(0);
-        setActiveNotes((prev) => prev.filter((n) => n.key !== key));
-        // Spawn next note after a short pause
-        spawnNextTimerRef.current = setTimeout(spawnNote, 400);
-      }
+      if (handledKeysRef.current.has(key)) return;
+      handledKeysRef.current.add(key);
+      playMissed();
+      setTotal((t) => t + 1);
+      setStreak(0);
+      setActiveNotes((prev) => prev.filter((n) => n.key !== key));
+      spawnNextTimerRef.current = setTimeout(spawnNote, 400);
     });
   }, [availableNotes, level.scrollDurationMs]);
 
@@ -220,6 +221,9 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
     if (unanswered.length === 0) return;
 
     const target = unanswered[0];
+    if (handledKeysRef.current.has(target.key)) return;
+    handledKeysRef.current.add(target.key);
+
     const isCorrect = target.note.name === guess;
 
     // Show the note name briefly

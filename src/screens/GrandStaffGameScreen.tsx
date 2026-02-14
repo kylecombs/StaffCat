@@ -59,6 +59,7 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
   const bassNotes = useRef(getNotesForLevel('bass', level)).current;
   const spawnedRef = useRef(0);
   const spawnNextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handledKeysRef = useRef<Set<number>>(new Set());
 
   activeNotesRef.current = activeNotes;
 
@@ -126,14 +127,13 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
       duration: level.scrollDurationMs,
       useNativeDriver: true,
     }).start(() => {
-      const current = activeNotesRef.current.find((n) => n.key === key);
-      if (current && !current.answered) {
-        playMissed();
-        setTotal((t) => t + 1);
-        setStreak(0);
-        setActiveNotes((prev) => prev.filter((n) => n.key !== key));
-        spawnNextTimerRef.current = setTimeout(spawnNote, 400);
-      }
+      if (handledKeysRef.current.has(key)) return;
+      handledKeysRef.current.add(key);
+      playMissed();
+      setTotal((t) => t + 1);
+      setStreak(0);
+      setActiveNotes((prev) => prev.filter((n) => n.key !== key));
+      spawnNextTimerRef.current = setTimeout(spawnNote, 400);
     });
   }, [trebleNotes, bassNotes, level.scrollDurationMs]);
 
@@ -160,6 +160,8 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
       .sort((a, b) => a.key - b.key);
     if (unanswered.length === 0) return;
     const target = unanswered[0];
+    if (handledKeysRef.current.has(target.key)) return;
+    handledKeysRef.current.add(target.key);
     const isCorrect = target.note.name === guess;
 
     setShowNoteName(target.note.name);
