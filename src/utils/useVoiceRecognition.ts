@@ -1,83 +1,97 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ExpoSpeechRecognitionModule,
-  useSpeechRecognitionEvent,
-} from 'expo-speech-recognition';
 import type { NoteName } from '../data/notes';
+
+// ---------------------------------------------------------------------------
+// Lazy-load expo-speech-recognition so the app still works in Expo Go
+// (where native modules aren't available).
+// ---------------------------------------------------------------------------
+
+let SpeechModule: typeof import('expo-speech-recognition').ExpoSpeechRecognitionModule | null = null;
+let addSpeechListener: typeof import('expo-speech-recognition').ExpoSpeechRecognitionModule.addListener | null = null;
+
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const mod = require('expo-speech-recognition');
+  SpeechModule = mod.ExpoSpeechRecognitionModule ?? null;
+  addSpeechListener = SpeechModule?.addListener?.bind(SpeechModule) ?? null;
+} catch {
+  // expo-speech-recognition not available (e.g. Expo Go) — voice stays disabled
+}
 
 interface UseVoiceRecognitionOptions {
   onNote: (note: NoteName) => void;
 }
 
 /**
- * Cross-platform voice recognition hook using expo-speech-recognition.
- * Works on iOS, Android, and Web.
+ * Cross-platform voice recognition hook.
  *
- * Toggle listening on/off. While listening, spoken note letters (A–G)
- * are extracted from transcripts and forwarded via `onNote`.
+ * Uses expo-speech-recognition when available (dev builds, production).
+ * Gracefully degrades to a no-op in Expo Go where native modules
+ * aren't loaded — the voice button simply won't do anything.
  */
 export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
   const [listening, setListening] = useState(false);
+  const [available, setAvailable] = useState(false);
   const wantListeningRef = useRef(false);
   const onNoteRef = useRef(onNote);
   onNoteRef.current = onNote;
 
-  // --- Event handlers via expo-speech-recognition hooks ---
+  // Check availability once on mount & register event listeners
+  useEffect(() => {
+    if (!SpeechModule || !addSpeechListener) return;
+    setAvailable(true);
 
-  useSpeechRecognitionEvent('start', () => {
-    setListening(true);
-  });
+    const subs = [
+      addSpeechListener('start', () => setListening(true)),
 
-  useSpeechRecognitionEvent('end', () => {
-    // If we still want to be listening (continuous toggle), restart
-    if (wantListeningRef.current) {
-      try {
-        ExpoSpeechRecognitionModule.start({
-          lang: 'en-US',
-          interimResults: false,
-          continuous: true,
-        });
-      } catch {
-        setListening(false);
-        wantListeningRef.current = false;
-      }
-    } else {
-      setListening(false);
-    }
-  });
+      addSpeechListener('end', () => {
+        if (wantListeningRef.current) {
+          try {
+            SpeechModule!.start({ lang: 'en-US', interimResults: false, continuous: true });
+          } catch {
+            setListening(false);
+            wantListeningRef.current = false;
+          }
+        } else {
+          setListening(false);
+        }
+      }),
 
-  useSpeechRecognitionEvent('result', (event) => {
-    const transcript = event.results?.[0]?.transcript ?? '';
-    const upper = transcript.trim().toUpperCase();
-    // Extract note letters — take the last one spoken
-    const matches = upper.match(/\b([A-G])\b/g);
-    if (matches && matches.length > 0) {
-      const letter = matches[matches.length - 1] as NoteName;
-      onNoteRef.current(letter);
-    }
-  });
+      addSpeechListener('result', (event: any) => {
+        const transcript: string = event.results?.[0]?.transcript ?? '';
+        const upper = transcript.trim().toUpperCase();
+        const matches = upper.match(/\b([A-G])\b/g);
+        if (matches && matches.length > 0) {
+          onNoteRef.current(matches[matches.length - 1] as NoteName);
+        }
+      }),
 
-  useSpeechRecognitionEvent('error', () => {
-    if (!wantListeningRef.current) {
-      setListening(false);
-    }
-  });
+      addSpeechListener('error', () => {
+        if (!wantListeningRef.current) {
+          setListening(false);
+        }
+      }),
+    ];
+
+    return () => {
+      wantListeningRef.current = false;
+      try { SpeechModule!.abort(); } catch { /* ignore */ }
+      subs.forEach((s) => s.remove());
+    };
+  }, []);
 
   // --- Public API ---
 
   const start = useCallback(async () => {
+    if (!SpeechModule) return;
     try {
-      const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      const result = await SpeechModule.requestPermissionsAsync();
       if (!result.granted) {
         console.warn('Speech recognition permission not granted');
         return;
       }
       wantListeningRef.current = true;
-      ExpoSpeechRecognitionModule.start({
-        lang: 'en-US',
-        interimResults: false,
-        continuous: true,
-      });
+      SpeechModule.start({ lang: 'en-US', interimResults: false, continuous: true });
     } catch (e) {
       console.warn('Could not start speech recognition:', e);
       wantListeningRef.current = false;
@@ -86,11 +100,7 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
 
   const stop = useCallback(() => {
     wantListeningRef.current = false;
-    try {
-      ExpoSpeechRecognitionModule.stop();
-    } catch {
-      // ignore
-    }
+    try { SpeechModule?.stop(); } catch { /* ignore */ }
     setListening(false);
   }, []);
 
@@ -102,17 +112,5 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
     }
   }, [start, stop]);
 
-  // Clean up on unmount
-  useEffect(() => {
-    return () => {
-      wantListeningRef.current = false;
-      try {
-        ExpoSpeechRecognitionModule.abort();
-      } catch {
-        // ignore
-      }
-    };
-  }, []);
-
-  return { listening, start, stop, toggle };
+  return { listening, available, start, stop, toggle };
 }

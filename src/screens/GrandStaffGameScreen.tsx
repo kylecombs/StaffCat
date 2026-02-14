@@ -241,13 +241,15 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
             </TouchableOpacity>
           ))}
         </View>
-        <TouchableOpacity
-          style={[styles.voiceButton, voice.listening && styles.voiceButtonActive]}
-          onPress={voice.toggle}>
-          <Text style={[styles.voiceButtonText, voice.listening && styles.voiceButtonActiveText]}>
-            {voice.listening ? '🎤 Listening...' : '🎤 Voice'}
-          </Text>
-        </TouchableOpacity>
+        {voice.available && (
+          <TouchableOpacity
+            style={[styles.voiceButton, voice.listening && styles.voiceButtonActive]}
+            onPress={voice.toggle}>
+            <Text style={[styles.voiceButtonText, voice.listening && styles.voiceButtonActiveText]}>
+              {voice.listening ? '🎤 Listening...' : '🎤 Voice'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );

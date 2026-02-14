@@ -332,23 +332,25 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
           ))}
         </View>
 
-        {/* Voice toggle */}
-        <TouchableOpacity
-          style={[
-            styles.voiceButton,
-            voice.listening && styles.voiceButtonActive,
-          ]}
-          onPress={voice.toggle}
-        >
-          <Text
+        {/* Voice toggle — hidden in Expo Go where native module isn't available */}
+        {voice.available && (
+          <TouchableOpacity
             style={[
-              styles.voiceButtonText,
-              voice.listening && styles.voiceButtonActiveText,
+              styles.voiceButton,
+              voice.listening && styles.voiceButtonActive,
             ]}
+            onPress={voice.toggle}
           >
-            {voice.listening ? '🎤 Listening...' : '🎤 Voice'}
-          </Text>
-        </TouchableOpacity>
+            <Text
+              style={[
+                styles.voiceButtonText,
+                voice.listening && styles.voiceButtonActiveText,
+              ]}
+            >
+              {voice.listening ? '🎤 Listening...' : '🎤 Voice'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
