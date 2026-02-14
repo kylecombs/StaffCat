@@ -6,7 +6,6 @@ import {
   Dimensions,
   TouchableOpacity,
   Animated,
-  Platform,
 } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import Staff, { STAFF_LEFT_MARGIN } from '../components/Staff';
@@ -19,6 +18,7 @@ import {
   getNotesForLevel,
 } from '../data/notes';
 import { playCorrect, playIncorrect, playMissed, loadSounds } from '../utils/sound';
+import { useVoiceRecognition } from '../utils/useVoiceRecognition';
 import { colors, spacing, fontSizes, borderRadius } from '../utils/theme';
 
 // ---------------------------------------------------------------------------
@@ -77,81 +77,18 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
   // Keep ref in sync
   activeNotesRef.current = activeNotes;
 
-  // Voice recognition state
-  const [voiceListening, setVoiceListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
-
   // Load sounds on mount
   useEffect(() => {
     loadSounds();
   }, []);
 
   // ------------------------------------------------------------------
-  // Voice recognition (Web Speech API — works on web and some Android)
+  // Voice recognition (cross-platform via expo-speech-recognition)
   // ------------------------------------------------------------------
-  const startVoiceRecognition = useCallback(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (!SpeechRecognition) return;
-
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = false;
-      recognition.lang = 'en-US';
-
-      recognition.onresult = (event: any) => {
-        const last = event.results[event.results.length - 1];
-        if (last.isFinal) {
-          const transcript = last[0].transcript.trim().toUpperCase();
-          // Extract note letter from speech
-          const match = transcript.match(/\b([A-G])\b/);
-          if (match) {
-            handleGuess(match[1] as NoteName);
-          }
-        }
-      };
-
-      recognition.onerror = () => {
-        setVoiceListening(false);
-      };
-
-      recognition.onend = () => {
-        // Restart if still listening
-        if (recognitionRef.current) {
-          try {
-            recognition.start();
-          } catch {
-            setVoiceListening(false);
-          }
-        }
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-      setVoiceListening(true);
-    }
-  }, []);
-
-  const stopVoiceRecognition = useCallback(() => {
-    if (recognitionRef.current) {
-      const rec = recognitionRef.current;
-      recognitionRef.current = null;
-      try {
-        rec.stop();
-      } catch {
-        // ignore
-      }
-      setVoiceListening(false);
-    }
-  }, []);
-
-  // Clean up voice on unmount
-  useEffect(() => {
-    return () => {
-      stopVoiceRecognition();
-    };
-  }, [stopVoiceRecognition]);
+  const handleGuessRef = useRef<(guess: NoteName) => void>(() => {});
+  const voice = useVoiceRecognition({
+    onNote: (note) => handleGuessRef.current(note),
+  });
 
   // ------------------------------------------------------------------
   // Spawn one note at a time
@@ -200,9 +137,9 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
     if (total >= NOTES_PER_ROUND && !finished) {
       setFinished(true);
       if (spawnNextTimerRef.current) clearTimeout(spawnNextTimerRef.current);
-      stopVoiceRecognition();
+      voice.stop();
     }
-  }, [total, finished, stopVoiceRecognition]);
+  }, [total, finished, voice.stop]);
 
   // ------------------------------------------------------------------
   // Handle a guess
@@ -264,6 +201,9 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
       spawnNextTimerRef.current = setTimeout(spawnNote, 300);
     }, delay);
   }, [spawnNote]);
+
+  // Keep voice callback ref in sync with latest handleGuess
+  handleGuessRef.current = handleGuess;
 
   // ------------------------------------------------------------------
   // Render
@@ -396,18 +336,17 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
         <TouchableOpacity
           style={[
             styles.voiceButton,
-            voiceListening && styles.voiceButtonActive,
+            voice.listening && styles.voiceButtonActive,
           ]}
-          onPress={() => {
-            if (voiceListening) {
-              stopVoiceRecognition();
-            } else {
-              startVoiceRecognition();
-            }
-          }}
+          onPress={voice.toggle}
         >
-          <Text style={styles.voiceButtonText}>
-            {voiceListening ? '🎤 Listening...' : '🎤 Voice'}
+          <Text
+            style={[
+              styles.voiceButtonText,
+              voice.listening && styles.voiceButtonActiveText,
+            ]}
+          >
+            {voice.listening ? '🎤 Listening...' : '🎤 Voice'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -536,6 +475,9 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.sm,
     color: colors.primary,
     fontWeight: '600',
+  },
+  voiceButtonActiveText: {
+    color: colors.buttonText,
   },
   // Results screen
   resultsCard: {

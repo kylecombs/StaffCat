@@ -37,6 +37,14 @@
         {
           "microphonePermission": "StaffCat uses the microphone for voice note recognition."
         }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "StaffCat needs the microphone so you can say note names aloud.",
+          "speechRecognitionPermission": "StaffCat uses speech recognition so you can say note names aloud.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
       ]
     ]
   }

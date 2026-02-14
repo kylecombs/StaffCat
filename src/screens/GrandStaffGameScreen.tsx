@@ -6,7 +6,6 @@ import {
   Dimensions,
   TouchableOpacity,
   Animated,
-  Platform,
 } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import Staff, { STAFF_LEFT_MARGIN } from '../components/Staff';
@@ -19,6 +18,7 @@ import {
   getNotesForLevel,
 } from '../data/notes';
 import { playCorrect, playIncorrect, playMissed, loadSounds } from '../utils/sound';
+import { useVoiceRecognition } from '../utils/useVoiceRecognition';
 import { colors, spacing, fontSizes, borderRadius } from '../utils/theme';
 
 interface ActiveNote {
@@ -63,50 +63,13 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
 
   activeNotesRef.current = activeNotes;
 
-  const [voiceListening, setVoiceListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
-
   useEffect(() => { loadSounds(); }, []);
 
-  // Voice recognition
-  const startVoiceRecognition = useCallback(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (!SR) return;
-      const recognition = new SR();
-      recognition.continuous = true;
-      recognition.interimResults = false;
-      recognition.lang = 'en-US';
-      recognition.onresult = (event: any) => {
-        const last = event.results[event.results.length - 1];
-        if (last.isFinal) {
-          const t = last[0].transcript.trim().toUpperCase();
-          const match = t.match(/\b([A-G])\b/);
-          if (match) handleGuess(match[1] as NoteName);
-        }
-      };
-      recognition.onerror = () => setVoiceListening(false);
-      recognition.onend = () => {
-        if (recognitionRef.current) {
-          try { recognition.start(); } catch { setVoiceListening(false); }
-        }
-      };
-      recognitionRef.current = recognition;
-      recognition.start();
-      setVoiceListening(true);
-    }
-  }, []);
-
-  const stopVoiceRecognition = useCallback(() => {
-    if (recognitionRef.current) {
-      const r = recognitionRef.current;
-      recognitionRef.current = null;
-      try { r.stop(); } catch {}
-      setVoiceListening(false);
-    }
-  }, []);
-
-  useEffect(() => () => { stopVoiceRecognition(); }, [stopVoiceRecognition]);
+  // Voice recognition (cross-platform via expo-speech-recognition)
+  const handleGuessRef = useRef<(guess: NoteName) => void>(() => {});
+  const voice = useVoiceRecognition({
+    onNote: (note) => handleGuessRef.current(note),
+  });
 
   // Spawn one note at a time
   const spawnNote = useCallback(() => {
@@ -150,9 +113,9 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
     if (total >= NOTES_PER_ROUND && !finished) {
       setFinished(true);
       if (spawnNextTimerRef.current) clearTimeout(spawnNextTimerRef.current);
-      stopVoiceRecognition();
+      voice.stop();
     }
-  }, [total, finished, stopVoiceRecognition]);
+  }, [total, finished, voice.stop]);
 
   const handleGuess = useCallback((guess: NoteName) => {
     const unanswered = activeNotesRef.current
@@ -189,6 +152,8 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
       spawnNextTimerRef.current = setTimeout(spawnNote, 300);
     }, delay);
   }, [spawnNote]);
+
+  handleGuessRef.current = handleGuess;
 
   if (finished) {
     const pct = total > 0 ? Math.round((score / total) * 100) : 0;
@@ -277,10 +242,10 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
           ))}
         </View>
         <TouchableOpacity
-          style={[styles.voiceButton, voiceListening && styles.voiceButtonActive]}
-          onPress={() => voiceListening ? stopVoiceRecognition() : startVoiceRecognition()}>
-          <Text style={styles.voiceButtonText}>
-            {voiceListening ? '🎤 Listening...' : '🎤 Voice'}
+          style={[styles.voiceButton, voice.listening && styles.voiceButtonActive]}
+          onPress={voice.toggle}>
+          <Text style={[styles.voiceButtonText, voice.listening && styles.voiceButtonActiveText]}>
+            {voice.listening ? '🎤 Listening...' : '🎤 Voice'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -331,6 +296,7 @@ const styles = StyleSheet.create({
   },
   voiceButtonActive: { backgroundColor: colors.primary },
   voiceButtonText: { fontSize: fontSizes.sm, color: colors.primary, fontWeight: '600' },
+  voiceButtonActiveText: { color: colors.buttonText },
   resultsCard: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xl },
   resultsTitle: { fontSize: fontSizes.xxl, fontWeight: '700', color: colors.text, marginBottom: spacing.lg },
   starsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
