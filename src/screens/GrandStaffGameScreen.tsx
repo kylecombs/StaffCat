@@ -8,6 +8,7 @@ import {
   Animated,
 } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
+import * as Haptics from 'expo-haptics';
 import Staff, { STAFF_LEFT_MARGIN } from '../components/Staff';
 import NoteHead from '../components/NoteHead';
 import {
@@ -132,10 +133,12 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
 
     if (isCorrect) {
       playCorrect();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setScore((s) => s + 1);
       setStreak((s) => { const n = s + 1; setBestStreak((b) => Math.max(b, n)); return n; });
     } else {
       playIncorrect();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setStreak(0);
     }
     setTotal((t) => t + 1);

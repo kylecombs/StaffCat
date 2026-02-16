@@ -8,6 +8,7 @@ import {
   Animated,
 } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
+import * as Haptics from 'expo-haptics';
 import Staff, { STAFF_LEFT_MARGIN } from '../components/Staff';
 import NoteHead from '../components/NoteHead';
 import {
@@ -169,6 +170,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
 
     if (isCorrect) {
       playCorrect();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setScore((s) => s + 1);
       setStreak((s) => {
         const next = s + 1;
@@ -177,6 +179,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
       });
     } else {
       playIncorrect();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setStreak(0);
     }
 
