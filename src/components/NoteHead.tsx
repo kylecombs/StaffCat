@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet } from 'react-native';
+import { Animated, StyleSheet, View } from 'react-native';
+import Svg, { Ellipse } from 'react-native-svg';
 import { colors } from '../utils/theme';
 
 interface NoteHeadProps {
@@ -15,7 +16,25 @@ interface NoteHeadProps {
   feedback: 'none' | 'correct' | 'incorrect';
 }
 
-const NOTE_SIZE = 16;
+const NOTE_W = 22;
+const NOTE_H = 16;
+
+const WholeNote: React.FC<{ color: string }> = ({ color }) => (
+  <Svg width={NOTE_W} height={NOTE_H} viewBox="0 0 22 16">
+    {/* Outer ellipse */}
+    <Ellipse cx="11" cy="8" rx="10" ry="7" fill={color} />
+    {/* Inner cutout — tilted ellipse to create the hollow look */}
+    <Ellipse
+      cx="11"
+      cy="8"
+      rx="5.5"
+      ry="4"
+      fill={colors.background}
+      rotation="-35"
+      origin="11, 8"
+    />
+  </Svg>
+);
 
 const NoteHead: React.FC<NoteHeadProps> = ({
   staffPosition,
@@ -50,7 +69,7 @@ const NoteHead: React.FC<NoteHeadProps> = ({
     }
   }, [feedback, scale, fadeOpacity]);
 
-  const bgColor =
+  const noteColor =
     feedback === 'correct'
       ? colors.correctFlash
       : feedback === 'incorrect'
@@ -68,8 +87,6 @@ const NoteHead: React.FC<NoteHeadProps> = ({
     for (let p = 6; p <= staffPosition; p += 2) {
       ledgerLinePositions.push(p);
     }
-    // If the note is ON a ledger line (even position), it's already included
-    // If the note is in a space above a ledger line (odd position), the line below it at p-1 won't be even — that's fine.
   } else if (staffPosition < -4) {
     for (let p = -6; p >= staffPosition; p -= 2) {
       ledgerLinePositions.push(p);
@@ -96,18 +113,19 @@ const NoteHead: React.FC<NoteHeadProps> = ({
         );
       })}
 
-      {/* Note head */}
+      {/* Whole note */}
       <Animated.View
         style={[
           styles.noteHead,
           {
-            backgroundColor: bgColor,
-            top: noteY - NOTE_SIZE / 2,
+            top: noteY - NOTE_H / 2,
             transform: [{ translateX: animX }, { scale }],
             opacity: fadeOpacity,
           },
         ]}
-      />
+      >
+        <WholeNote color={noteColor} />
+      </Animated.View>
     </>
   );
 };
@@ -115,17 +133,16 @@ const NoteHead: React.FC<NoteHeadProps> = ({
 const styles = StyleSheet.create({
   noteHead: {
     position: 'absolute',
-    width: NOTE_SIZE,
-    height: NOTE_SIZE,
-    borderRadius: NOTE_SIZE / 2,
-    left: -NOTE_SIZE / 2,
+    width: NOTE_W,
+    height: NOTE_H,
+    left: -NOTE_W / 2,
   },
   ledgerLine: {
     position: 'absolute',
     height: 1.5,
-    width: 30,
+    width: 34,
     backgroundColor: colors.ledgerLine,
-    left: -15,
+    left: -17,
   },
 });
 
