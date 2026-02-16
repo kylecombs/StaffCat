@@ -27,7 +27,7 @@ const PHONETIC_TO_NOTE: Record<string, NoteName> = {
   // A
   AY: 'A', HEY: 'A', EH: 'A', AE: 'A', EIGHT: 'A', ACE: 'A',
   // B
-  BE: 'B', BEE: 'B', BEA: 'B', BEE: 'B', BEAN: 'B',
+  BE: 'B', BEE: 'B', BEA: 'B', BEAN: 'B',
   // C
   SEE: 'C', SEA: 'C', CEE: 'C', SI: 'C',
   // D
@@ -85,6 +85,7 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
 
   // Debounce: prevent interim results from firing the same note repeatedly
   const lastFiredRef = useRef<{ note: NoteName; time: number } | null>(null);
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const DEBOUNCE_MS = 600;
 
   // Check availability once on mount & register event listeners
@@ -97,12 +98,26 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
 
       addSpeechListener('end', () => {
         if (wantListeningRef.current) {
-          try {
-            SpeechModule!.start({ lang: 'en-US', interimResults: true, continuous: true });
-          } catch {
-            setListening(false);
-            wantListeningRef.current = false;
-          }
+          // Delay restart so the engine finishes shutting down first.
+          // Without this, an immediate start() call can silently fail on
+          // some platforms, causing recognition to stop after the first note.
+          restartTimerRef.current = setTimeout(() => {
+            if (!wantListeningRef.current) return;
+            try {
+              SpeechModule!.start({ lang: 'en-US', interimResults: true, continuous: true });
+            } catch {
+              // Retry once more after a longer delay before giving up
+              restartTimerRef.current = setTimeout(() => {
+                if (!wantListeningRef.current) return;
+                try {
+                  SpeechModule!.start({ lang: 'en-US', interimResults: true, continuous: true });
+                } catch {
+                  setListening(false);
+                  wantListeningRef.current = false;
+                }
+              }, 500);
+            }
+          }, 150);
         } else {
           setListening(false);
         }
@@ -123,7 +138,18 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
       }),
 
       addSpeechListener('error', () => {
-        if (!wantListeningRef.current) {
+        if (wantListeningRef.current) {
+          // Try to restart after an error — the engine may have simply timed out
+          restartTimerRef.current = setTimeout(() => {
+            if (!wantListeningRef.current) return;
+            try {
+              SpeechModule!.start({ lang: 'en-US', interimResults: true, continuous: true });
+            } catch {
+              setListening(false);
+              wantListeningRef.current = false;
+            }
+          }, 300);
+        } else {
           setListening(false);
         }
       }),
@@ -131,6 +157,7 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
 
     return () => {
       wantListeningRef.current = false;
+      if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
       try { SpeechModule!.abort(); } catch { /* ignore */ }
       subs.forEach((s) => s.remove());
     };
@@ -156,6 +183,7 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
 
   const stop = useCallback(() => {
     wantListeningRef.current = false;
+    if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
     try { SpeechModule?.stop(); } catch { /* ignore */ }
     setListening(false);
   }, []);

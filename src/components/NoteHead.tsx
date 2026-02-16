@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
-import Svg, { Ellipse } from 'react-native-svg';
 import { colors } from '../utils/theme';
 
 interface NoteHeadProps {
@@ -18,23 +17,6 @@ interface NoteHeadProps {
 
 const NOTE_W = 22;
 const NOTE_H = 16;
-
-const WholeNote: React.FC<{ color: string }> = ({ color }) => (
-  <Svg width={NOTE_W} height={NOTE_H} viewBox="0 0 22 16">
-    {/* Outer ellipse */}
-    <Ellipse cx="11" cy="8" rx="10" ry="7" fill={color} />
-    {/* Inner cutout — tilted ellipse to create the hollow look */}
-    <Ellipse
-      cx="11"
-      cy="8"
-      rx="5.5"
-      ry="4"
-      fill={colors.background}
-      rotation="-35"
-      origin="11, 8"
-    />
-  </Svg>
-);
 
 const NoteHead: React.FC<NoteHeadProps> = ({
   staffPosition,
@@ -121,11 +103,10 @@ const NoteHead: React.FC<NoteHeadProps> = ({
             top: noteY - NOTE_H / 2,
             transform: [{ translateX: animX }, { scale }],
             opacity: fadeOpacity,
+            borderColor: noteColor,
           },
         ]}
-      >
-        <WholeNote color={noteColor} />
-      </Animated.View>
+      />
     </>
   );
 };
@@ -136,6 +117,9 @@ const styles = StyleSheet.create({
     width: NOTE_W,
     height: NOTE_H,
     left: -NOTE_W / 2,
+    borderWidth: 2.5,
+    borderRadius: NOTE_W / 2,
+    backgroundColor: 'transparent',
   },
   ledgerLine: {
     position: 'absolute',

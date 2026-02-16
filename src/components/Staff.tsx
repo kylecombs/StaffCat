@@ -30,6 +30,13 @@ const LINE_POSITIONS = [4, 2, 0, -2, -4]; // top line to bottom line on screen
 
 const Staff: React.FC<StaffProps> = ({ clef, halfSpace, containerHeight, children }) => {
   const centreY = containerHeight / 2;
+  const staffHeight = 8 * halfSpace; // top line to bottom line
+
+  // Scale the clef so its visible portion matches the staff height.
+  // The treble clef glyph's visible area is roughly 55% of the font's em-size,
+  // so we need a larger fontSize to fill the staff.  Bass clef is ~60%.
+  const trebleFontSize = staffHeight / 0.55;
+  const bassFontSize = staffHeight / 0.65;
 
   return (
     <View style={[styles.container, { height: containerHeight }]}>
@@ -51,7 +58,9 @@ const Staff: React.FC<StaffProps> = ({ clef, halfSpace, containerHeight, childre
         <Text
           style={[
             styles.clefText,
-            clef === 'treble' ? styles.trebleClef : styles.bassClef,
+            clef === 'treble'
+              ? { fontSize: trebleFontSize, marginTop: -trebleFontSize * 0.05 }
+              : { fontSize: bassFontSize, marginTop: -bassFontSize * 0.08 },
           ]}
         >
           {clef === 'treble' ? '𝄞' : '𝄢'}
@@ -89,14 +98,6 @@ const styles = StyleSheet.create({
   },
   clefText: {
     color: colors.clef,
-  },
-  trebleClef: {
-    fontSize: 88,
-    marginTop: -4,
-  },
-  bassClef: {
-    fontSize: 72,
-    marginTop: -6,
   },
 });
 
