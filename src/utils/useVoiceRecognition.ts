@@ -86,7 +86,7 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
   // Debounce: prevent interim results from firing the same note repeatedly
   const lastFiredRef = useRef<{ note: NoteName; time: number } | null>(null);
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const DEBOUNCE_MS = 600;
+  const DEBOUNCE_MS = 150;
 
   // Check availability once on mount & register event listeners
   useEffect(() => {
@@ -134,10 +134,19 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
       }),
 
       addSpeechListener('result', (event: any) => {
-        const transcript: string = event.results?.[0]?.transcript ?? '';
-        const isFinal: boolean = event.isFinal ?? event.results?.[0]?.isFinal ?? false;
+        const result = event.results?.[0];
+        const transcript: string = result?.transcript ?? '';
+        const segments: Array<{ segment: string }> = result?.segments ?? [];
+        const isFinal: boolean = event.isFinal ?? result?.isFinal ?? false;
         console.log('[Voice] >>> result event, transcript=', JSON.stringify(transcript), 'isFinal=', isFinal, 'raw=', JSON.stringify(event.results));
-        const note = parseNoteFromTranscript(transcript);
+
+        // Use the most recent segment rather than the full transcript to avoid
+        // accumulation issues when multiple notes are spoken in one session.
+        const lastSegment = segments.length > 0 ? segments[segments.length - 1].segment : null;
+        const textToParse = lastSegment ?? transcript;
+        console.log('[Voice] result: parsing from', JSON.stringify(textToParse));
+
+        const note = parseNoteFromTranscript(textToParse);
         if (note) {
           const now = Date.now();
           const last = lastFiredRef.current;
@@ -149,7 +158,7 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
           lastFiredRef.current = { note, time: now };
           onNoteRef.current(note);
         } else {
-          console.log('[Voice] result: no note parsed from transcript');
+          console.log('[Voice] result: no note parsed from', JSON.stringify(textToParse));
         }
       }),
 

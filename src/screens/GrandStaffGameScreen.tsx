@@ -132,7 +132,7 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
     setTimeout(() => setShowNoteName(null), 800);
 
     if (isCorrect) {
-      playCorrect();
+      playCorrect(target.note.id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setScore((s) => s + 1);
       setStreak((s) => { const n = s + 1; setBestStreak((b) => Math.max(b, n)); return n; });

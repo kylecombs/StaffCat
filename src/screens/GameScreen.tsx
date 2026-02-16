@@ -169,7 +169,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
     setTimeout(() => setShowNoteName(null), 800);
 
     if (isCorrect) {
-      playCorrect();
+      playCorrect(target.note.id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setScore((s) => s + 1);
       setStreak((s) => {
