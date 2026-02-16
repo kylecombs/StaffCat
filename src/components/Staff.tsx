@@ -22,7 +22,7 @@ interface StaffProps {
   children?: React.ReactNode;
 }
 
-export const STAFF_LEFT_MARGIN = 60;
+export const STAFF_LEFT_MARGIN = 56;
 
 /** Staff line positions (bottom to top in musical terms, but since Y goes down,
  *  position -4 is the bottom line rendered lower on screen) */
@@ -40,14 +40,13 @@ const Staff: React.FC<StaffProps> = ({ clef, halfSpace, containerHeight, childre
           style={[
             styles.staffLine,
             {
-              // Higher staff position → drawn higher (lower Y)
               top: centreY - pos * halfSpace - 0.75,
             },
           ]}
         />
       ))}
 
-      {/* Clef symbol */}
+      {/* Clef symbol — overlaid on top of the staff lines */}
       <View style={[styles.clefContainer, { height: containerHeight }]}>
         <Text
           style={[
@@ -75,29 +74,29 @@ const styles = StyleSheet.create({
   },
   staffLine: {
     position: 'absolute',
-    left: STAFF_LEFT_MARGIN - 4,
+    left: 0,
     right: 0,
     height: 1.5,
     backgroundColor: colors.staffLine,
   },
   clefContainer: {
     position: 'absolute',
-    left: 4,
+    left: 6,
     top: 0,
-    width: STAFF_LEFT_MARGIN - 8,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1,
   },
   clefText: {
     color: colors.clef,
   },
   trebleClef: {
-    fontSize: 64,
+    fontSize: 88,
     marginTop: -4,
   },
   bassClef: {
-    fontSize: 52,
-    marginTop: -2,
+    fontSize: 72,
+    marginTop: -6,
   },
 });
 
