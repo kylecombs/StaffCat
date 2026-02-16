@@ -94,24 +94,33 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
     setAvailable(true);
 
     const subs = [
-      addSpeechListener('start', () => setListening(true)),
+      addSpeechListener('start', () => {
+        console.log('[Voice] >>> start event');
+        setListening(true);
+      }),
 
       addSpeechListener('end', () => {
+        console.log('[Voice] >>> end event, wantListening=', wantListeningRef.current);
         if (wantListeningRef.current) {
           // Delay restart so the engine finishes shutting down first.
-          // Without this, an immediate start() call can silently fail on
-          // some platforms, causing recognition to stop after the first note.
           restartTimerRef.current = setTimeout(() => {
-            if (!wantListeningRef.current) return;
+            if (!wantListeningRef.current) {
+              console.log('[Voice] end restart: wantListening became false, skipping');
+              return;
+            }
+            console.log('[Voice] end restart: attempting start()...');
             try {
               SpeechModule!.start({ lang: 'en-US', interimResults: true, continuous: true });
-            } catch {
-              // Retry once more after a longer delay before giving up
+              console.log('[Voice] end restart: start() succeeded');
+            } catch (e) {
+              console.warn('[Voice] end restart: start() failed, retrying in 500ms', e);
               restartTimerRef.current = setTimeout(() => {
                 if (!wantListeningRef.current) return;
                 try {
                   SpeechModule!.start({ lang: 'en-US', interimResults: true, continuous: true });
-                } catch {
+                  console.log('[Voice] end restart (retry): start() succeeded');
+                } catch (e2) {
+                  console.warn('[Voice] end restart (retry): giving up', e2);
                   setListening(false);
                   wantListeningRef.current = false;
                 }
@@ -119,32 +128,42 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
             }
           }, 150);
         } else {
+          console.log('[Voice] end: not restarting (wantListening=false)');
           setListening(false);
         }
       }),
 
       addSpeechListener('result', (event: any) => {
         const transcript: string = event.results?.[0]?.transcript ?? '';
+        const isFinal: boolean = event.isFinal ?? event.results?.[0]?.isFinal ?? false;
+        console.log('[Voice] >>> result event, transcript=', JSON.stringify(transcript), 'isFinal=', isFinal, 'raw=', JSON.stringify(event.results));
         const note = parseNoteFromTranscript(transcript);
         if (note) {
           const now = Date.now();
           const last = lastFiredRef.current;
           if (last && last.note === note && now - last.time < DEBOUNCE_MS) {
-            return; // skip duplicate from interim results
+            console.log('[Voice] result: debounced duplicate', note);
+            return;
           }
+          console.log('[Voice] result: firing note', note);
           lastFiredRef.current = { note, time: now };
           onNoteRef.current(note);
+        } else {
+          console.log('[Voice] result: no note parsed from transcript');
         }
       }),
 
-      addSpeechListener('error', () => {
+      addSpeechListener('error', (event: any) => {
+        console.warn('[Voice] >>> error event', JSON.stringify(event));
         if (wantListeningRef.current) {
-          // Try to restart after an error — the engine may have simply timed out
+          console.log('[Voice] error: will retry in 300ms');
           restartTimerRef.current = setTimeout(() => {
             if (!wantListeningRef.current) return;
             try {
               SpeechModule!.start({ lang: 'en-US', interimResults: true, continuous: true });
-            } catch {
+              console.log('[Voice] error restart: start() succeeded');
+            } catch (e) {
+              console.warn('[Voice] error restart: giving up', e);
               setListening(false);
               wantListeningRef.current = false;
             }
@@ -167,21 +186,24 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
 
   const start = useCallback(async () => {
     if (!SpeechModule) return;
+    console.log('[Voice] start() called');
     try {
       const result = await SpeechModule.requestPermissionsAsync();
       if (!result.granted) {
-        console.warn('Speech recognition permission not granted');
+        console.warn('[Voice] start: permission not granted');
         return;
       }
       wantListeningRef.current = true;
       SpeechModule.start({ lang: 'en-US', interimResults: true, continuous: true });
+      console.log('[Voice] start: SpeechModule.start() called');
     } catch (e) {
-      console.warn('Could not start speech recognition:', e);
+      console.warn('[Voice] start: failed', e);
       wantListeningRef.current = false;
     }
   }, []);
 
   const stop = useCallback(() => {
+    console.log('[Voice] stop() called');
     wantListeningRef.current = false;
     if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
     try { SpeechModule?.stop(); } catch { /* ignore */ }
