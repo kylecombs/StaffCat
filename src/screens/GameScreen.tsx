@@ -20,6 +20,7 @@ import {
 } from '../data/notes';
 import { playCorrect, playIncorrect, playMissed, loadSounds } from '../utils/sound';
 import { useVoiceRecognition } from '../utils/useVoiceRecognition';
+import { usePitchDetection } from '../utils/usePitchDetection';
 import { colors, spacing, fontSizes, borderRadius } from '../utils/theme';
 
 // ---------------------------------------------------------------------------
@@ -84,12 +85,32 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
   }, []);
 
   // ------------------------------------------------------------------
-  // Voice recognition (cross-platform via expo-speech-recognition)
+  // Mic input: voice recognition + pitch detection run together
   // ------------------------------------------------------------------
   const handleGuessRef = useRef<(guess: NoteName) => void>(() => {});
   const voice = useVoiceRecognition({
     onNote: (note) => handleGuessRef.current(note),
   });
+  const pitch = usePitchDetection({
+    onNote: (note) => handleGuessRef.current(note),
+  });
+  const micAvailable = voice.available || pitch.available;
+  const micListening = voice.listening || pitch.listening;
+
+  const toggleMic = useCallback(async () => {
+    if (micListening) {
+      voice.stop();
+      pitch.stop();
+    } else {
+      // Start both — each gracefully no-ops if its module is unavailable
+      await Promise.all([voice.start(), pitch.start()]);
+    }
+  }, [micListening, voice, pitch]);
+
+  const stopMic = useCallback(() => {
+    voice.stop();
+    pitch.stop();
+  }, [voice, pitch]);
 
   // ------------------------------------------------------------------
   // Spawn one note at a time
@@ -138,9 +159,9 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
     if (total >= NOTES_PER_ROUND && !finished) {
       setFinished(true);
       if (spawnNextTimerRef.current) clearTimeout(spawnNextTimerRef.current);
-      voice.stop();
+      stopMic();
     }
-  }, [total, finished, voice.stop]);
+  }, [total, finished, stopMic]);
 
   // ------------------------------------------------------------------
   // Handle a guess
@@ -335,22 +356,22 @@ const GameScreen: React.FC<GameScreenProps> = ({ clef, level, onBack }) => {
           ))}
         </View>
 
-        {/* Voice toggle — hidden in Expo Go where native module isn't available */}
-        {voice.available && (
+        {/* Mic toggle — starts both voice recognition and pitch detection */}
+        {micAvailable && (
           <TouchableOpacity
             style={[
               styles.voiceButton,
-              voice.listening && styles.voiceButtonActive,
+              micListening && styles.voiceButtonActive,
             ]}
-            onPress={voice.toggle}
+            onPress={toggleMic}
           >
             <Text
               style={[
                 styles.voiceButtonText,
-                voice.listening && styles.voiceButtonActiveText,
+                micListening && styles.voiceButtonActiveText,
               ]}
             >
-              {voice.listening ? '🎤 Listening...' : '🎤 Voice'}
+              {micListening ? '🎤 Listening...' : '🎤 Mic'}
             </Text>
           </TouchableOpacity>
         )}
