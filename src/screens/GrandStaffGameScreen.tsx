@@ -20,6 +20,7 @@ import {
 } from '../data/notes';
 import { playCorrect, playIncorrect, playMissed, loadSounds } from '../utils/sound';
 import { useVoiceRecognition } from '../utils/useVoiceRecognition';
+import { usePitchDetection } from '../utils/usePitchDetection';
 import { colors, spacing, fontSizes, borderRadius } from '../utils/theme';
 
 interface ActiveNote {
@@ -66,11 +67,30 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
 
   useEffect(() => { loadSounds(); }, []);
 
-  // Voice recognition (cross-platform via expo-speech-recognition)
+  // Mic input: voice recognition + pitch detection run together
   const handleGuessRef = useRef<(guess: NoteName) => void>(() => {});
   const voice = useVoiceRecognition({
     onNote: (note) => handleGuessRef.current(note),
   });
+  const pitch = usePitchDetection({
+    onNote: (note) => handleGuessRef.current(note),
+  });
+  const micAvailable = voice.available || pitch.available;
+  const micListening = voice.listening || pitch.listening;
+
+  const toggleMic = useCallback(async () => {
+    if (micListening) {
+      voice.stop();
+      pitch.stop();
+    } else {
+      await Promise.all([voice.start(), pitch.start()]);
+    }
+  }, [micListening, voice, pitch]);
+
+  const stopMic = useCallback(() => {
+    voice.stop();
+    pitch.stop();
+  }, [voice, pitch]);
 
   // Spawn one note at a time
   const spawnNote = useCallback(() => {
@@ -114,9 +134,9 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
     if (total >= NOTES_PER_ROUND && !finished) {
       setFinished(true);
       if (spawnNextTimerRef.current) clearTimeout(spawnNextTimerRef.current);
-      voice.stop();
+      stopMic();
     }
-  }, [total, finished, voice.stop]);
+  }, [total, finished, stopMic]);
 
   const handleGuess = useCallback((guess: NoteName) => {
     const unanswered = activeNotesRef.current
@@ -244,12 +264,12 @@ const GrandStaffGameScreen: React.FC<GrandStaffGameScreenProps> = ({ level, onBa
             </TouchableOpacity>
           ))}
         </View>
-        {voice.available && (
+        {micAvailable && (
           <TouchableOpacity
-            style={[styles.voiceButton, voice.listening && styles.voiceButtonActive]}
-            onPress={voice.toggle}>
-            <Text style={[styles.voiceButtonText, voice.listening && styles.voiceButtonActiveText]}>
-              {voice.listening ? '🎤 Listening...' : '🎤 Voice'}
+            style={[styles.voiceButton, micListening && styles.voiceButtonActive]}
+            onPress={toggleMic}>
+            <Text style={[styles.voiceButtonText, micListening && styles.voiceButtonActiveText]}>
+              {micListening ? '🎤 Listening...' : '🎤 Mic'}
             </Text>
           </TouchableOpacity>
         )}
