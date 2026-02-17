@@ -86,7 +86,7 @@ export function useVoiceRecognition({ onNote }: UseVoiceRecognitionOptions) {
   // Debounce: prevent interim results from firing the same note repeatedly
   const lastFiredRef = useRef<{ note: NoteName; time: number } | null>(null);
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const DEBOUNCE_MS = 150;
+  const DEBOUNCE_MS = 50;
 
   // Check availability once on mount & register event listeners
   useEffect(() => {
